@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Qui definiamo i tuoi colori ufficiali direttamente nel CSS */
+@theme {
+  --color-vinciguerra-gold: #ad9263;
+  --color-vinciguerra-dark: #333333;
+}
+
+/* Rimuoviamo il test del rosso che avevamo messo prima */
+/* (Assicurati che non ci sia più il body { background: red }) */

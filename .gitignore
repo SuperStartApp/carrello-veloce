@@ -1,0 +1,17 @@
+# Dipendenze (troppo pesanti per essere caricate)
+node_modules/
+
+# Build di Next.js (vengono generate automaticamente da Vercel)
+.next/
+out/
+build/
+
+# FILE SEGRETI (Fondamentale!)
+.env*.local
+.env
+
+# Log e cache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
