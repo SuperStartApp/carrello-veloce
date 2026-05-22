@@ -20,12 +20,12 @@ const Footer = () => {
           <span className="text-white font-bold text-lg italic">SuPeR HO.RE.CA. edition</span> 
           <br /> 
           <a 
-            href="https://www.vinciguerrabeverage.it" 
+            href="#" 
             target="_blank" 
             rel="noopener noreferrer"
             className="text-vinciguerra-gold hover:text-white transition-colors duration-300 underline underline-offset-4 decoration-vinciguerra-gold/50"
           >
-            Vinciguerra Beverage Srl
+            Gloria Natangelo
           </a>
         </p>
 

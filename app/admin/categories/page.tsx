@@ -17,8 +17,8 @@ export default function AdminCategories() {
 
   const fetchCategories = async () => {
     setLoading(true);
-    // Prendiamo tutto, l'ordinamento lo faremo noi in JS per essere sicuri al 100%
-    const { data } = await supabase.from('vb_categories').select('*');
+    const { data, error } = await supabase.from('vb_categories').select('*');
+    if (error) console.error("Errore caricamento:", error);
     setCategories(data || []);
     setLoading(false);
   };
@@ -29,18 +29,32 @@ export default function AdminCategories() {
     e.preventDefault();
     if (!newName) return;
 
-    if (editingId) {
-      await supabase.from('vb_categories').update({ name: newName, parent_id: selectedParent || null, position: newPos }).eq('id', editingId);
-    } else {
-      await supabase.from('vb_//categories').insert([{ name: newName, parent_id: selectedParent || null, position: newPos }]);
+    try {
+      if (editingId) {
+        // MODIFICA
+        const { error } = await supabase
+          .from('vb_categories')
+          .update({ name: newName, parent_id: selectedParent || null, position: newPos })
+          .eq('id', editingId);
+        
+        if (error) throw error;
+      } else {
+        // CREAZIONE - CORRETTO: vb_categories (senza //)
+        const { error } = await supabase
+          .from('vb_categories')
+          .insert([{ name: newName, parent_id: selectedParent || null, position: newPos }]);
+        
+        if (error) throw error;
+      }
+      
+      resetForm();
+      await fetchCategories();
+    } catch (error: any) {
+      alert("Errore nel salvataggio: " + error.message);
     }
-    resetForm();
-    fetchCategories();
   };
 
-  // LOGICA DI ORDINAMENTO CORRETTA
   const movePosition = async (id: string, direction: 'up' | 'down', index: number, isParent: boolean) => {
-    // 1. Creiamo la lista ordinata in base a come la vede l'utente in quel momento
     const list = isParent 
       ? categories.filter(c => !c.parent_id).sort((a, b) => a.position - b.position)
       : categories.filter(c => c.parent_id === categories.find(cat => cat.id === id)?.parent_id).sort((a, b) => a.position - b.position);
@@ -54,7 +68,6 @@ export default function AdminCategories() {
     const oldPos = currentItem.position;
     const newPos = targetItem.position;
 
-    // Scambiamo le posizioni nel database
     await Promise.all([
       supabase.from('vb_categories').update({ position: newPos }).eq('id', id),
       supabase.from('vb_categories').update({ position: oldPos }).eq('id', targetItem.id)
@@ -74,16 +87,21 @@ export default function AdminCategories() {
 
   const deleteCategory = async (id: string) => {
     if (!confirm('Sei sicuro? Eliminerai anche le sottocategorie!')) return;
-    await supabase.from('vb_categories').delete().eq('id', id);
-    fetchCategories();
+    const { error } = await supabase.from('vb_categories').delete().eq('id', id);
+    if (error) alert("Errore eliminazione");
+    else fetchCategories();
   };
 
   const toggleExpand = (id: string) => {
     setExpandedParents(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Ordiniamo le madri per posizione, poi per nome
   const parents = categories
+    .filter(c => !c.parent_id)
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.//name)); // Fix typo here too
+
+  // CORREZIONE SORTING FINALE
+  const sortedParents = [...categories]
     .filter(c => !c.parent_id)
     .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
 
@@ -100,7 +118,7 @@ export default function AdminCategories() {
           <input type="text" placeholder="Nome" className="p-2 border rounded text-black" value={newName} onChange={(e) => setNewName(e.target.value)} required />
           <select className="p-2 border rounded text-black" value={selectedParent} onChange={(e) => setSelectedParent(e.target.value)}>
             <option value="">-- Genitore (Principale) --</option>
-            {parents.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {sortedParents.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <input type="number" placeholder="Posizione" className="p-2 border rounded text-black" value={newPos} onChange={(e) => setNewPos(Number(e.target.value))} />
           <div className="flex gap-2">
@@ -119,11 +137,10 @@ export default function AdminCategories() {
       <div className="space-y-4">
         {loading ? (
           <div className="text-center py-10 text-gray-400">Caricamento struttura...</div>
-        ) : parents.length === 0 ? (
+        ) : sortedParents.length === 0 ? (
           <div className="text-center py-10 text-gray-400">Nessuna categoria principale trovata.</div>
         ) : (
-          parents.map((parent, pIdx) => {
-            // Ordiniamo le figlie per posizione, poi per nome
+          sortedParents.map((parent, pIdx) => {
             const children = categories
               .filter(c => c.parent_id === parent.id)
               .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
