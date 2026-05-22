@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Lock, ArrowLeft, ShoppingBag, Plus, Minus, ChevronRight, Package, Image as ImageIcon, ArrowRight, CheckCircle, History, Eye, FileText, X, Download } from 'lucide-react';
+import { Lock, ArrowLeft, ShoppingBag, Plus, Minus, ChevronRight, Package, Image as ImageIcon, ArrowRight, CheckCircle, History, Eye, FileText, X, Trash2, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -23,6 +23,7 @@ export default function ClienteOrdinePage() {
   const [error, setError] = useState('');
   const [orderSent, setOrderSent] = useState(false);
   const [currentTab, setCurrentTab] = useState<'shop' | 'history'>('shop');
+  const [isCartOpen, setIsCartOpen] = useState(false); // Stato per il pannello carrello
 
   const [view, setView] = useState<'categories' | 'subcategories' | 'products'>('categories');
   const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
@@ -121,7 +122,7 @@ export default function ClienteOrdinePage() {
         return { order_id: order.id, product_id: prodId, quantity: qty, price_at_time: getFinalPrice(prod) };
       });
       await supabase.from('vb_order_items').insert(items);
-      setCart({}); setOrderSent(true);
+      setCart({}); setOrderSent(true); setIsCartOpen(false);
     } catch (err) { alert('Errore invio ordine.'); }
   };
 
@@ -207,7 +208,7 @@ export default function ClienteOrdinePage() {
                   const qty = cart[prod.id] || 0;
                   return (
                     <div key={prod.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 flex flex-col">
-                      <div className="h-48 bg-gray-50 relative">
+                      <div className="h-48 bg-white relative border-b border-gray-50">
                         {prod.image_url ? <img src={prod.image_url} alt={prod.name} className="w-full h-full object-contain p-2" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={48}/></div>}
                         <div className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded text-[10px] font-bold text-vinciguerra-gold shadow-sm">{prod.packaging}</div>
                       </div>
@@ -256,7 +257,79 @@ export default function ClienteOrdinePage() {
         )}
       </main>
 
-      {/* MODAL DETTAGLI ORDINE CLIENTE */}
+      {/* CARRELLO VOLANTE (Apre il pannello) */}
+      {Object.keys(cart).length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-50">
+          <button 
+            onClick={() => setIsCartOpen(true)}
+            className="w-full bg-vinciguerra-dark text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center hover:scale-105 transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <div className="bg-vinciguerra-gold text-white w-10 h-10 rounded-full flex items-center justify-center font-bold">
+                {Object.values(cart).reduce((a, b) => a + b, 0)}
+              </div>
+              <div><p className="text-xs text-gray-400">Vedi riepilogo</p><p className="font-bold text-lg">€ {Object.entries(cart).reduce((t, [id, q]) => t + (getFinalPrice(products.find(p => p.id === id)!) * q), 0).toFixed(2)}</p></div>
+            </div>
+            <div className="bg-vinciguerra-gold px-4 py-2 rounded-xl font-bold flex items-center gap-2">
+              Carrello <ArrowRight size={18}/>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* MODAL RIEPILOGO CARRELLO (Sfondo sfocato) */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+            <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+              <div className="flex items-center gap-3">
+                <ShoppingBag className="text-vinciguerra-gold" size={24} />
+                <h2 className="text-xl font-bold text-vinciguerra-dark">Riepilogo Ordine</h2>
+              </div>
+              <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X size={24}/></button>
+            </div>
+            
+            <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4">
+              {Object.entries(cart).map(([prodId, qty]) => {
+                const prod = products.find(p => p.id === prodId)!;
+                const finalPrice = getFinalPrice(prod);
+                return (
+                  <div key={prodId} className="flex items-center gap-4 p-3 bg-white border border-gray-100 rounded-2xl shadow-sm">
+                    <div className="w-16 h-16 bg-gray-50 rounded-lg overflow-hidden border">
+                      {prod.image_url ? <img src={prod.image_url} className="w-full h-full object-contain" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={20}/></div>}
+                    </div>
+                    <div className="flex-grow">
+                      <p className="font-bold text-vinciguerra-dark text-sm">{prod.name}</p>
+                      <p className="text-[10px] text-gray-400">{prod.packaging}</p>
+                      <p className="text-vinciguerra-gold font-bold text-sm">€ {finalPrice.toFixed(2)}</p>
+                    </div>
+                    <div className="flex items-center gap-3 bg-gray-100 p-1 rounded-xl border border-gray-200">
+                      <button onClick={() => updateQty(prod, -1)} className="p-1 text-vinciguerra-gold hover:bg-white rounded-md transition-colors"><Minus size={16}/></button>
+                      <span className="font-bold text-sm w-8 text-center">{qty}</span>
+                      <button onClick={() => updateQty(prod, 1)} className="p-1 text-vinciguerra-gold hover:bg-white rounded-md transition-colors"><Plus size={16}/></button>
+                    </div>
+                    <div className="text-right min-w-[70px]">
+                      <p className="font-bold text-vinciguerra-dark">€ {(finalPrice * qty).toFixed(2)}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-6 bg-gray-50 border-t border-gray-100">
+              <div className="flex justify-between items-center mb-6">
+                <span className="text-gray-500 font-medium">Totale Ordine</span>
+                <span className="text-2xl font-bold text-vinciguerra-dark">€ {Object.entries(cart).reduce((t, [id, q]) => t + (getFinalPrice(products.find(p => p.id === id)!) * q), 0).toFixed(2)}</span>
+              </div>
+              <button onClick={submitOrder} className="w-full bg-vinciguerra-gold text-white py-4 rounded-2xl font-bold text-lg hover:bg-opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-vinciguerra-gold/20">
+                Conferma e Invia Ordine <ArrowRight size={20}/>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DETTAGLIO ORDINE (stessa logica di prima) */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden flex flex-col">
@@ -286,18 +359,6 @@ export default function ClienteOrdinePage() {
               <button onClick={() => setSelectedOrder(null)} className="flex-1 py-3 text-gray-500 font-medium">Chiudi</button>
               <button onClick={downloadOrderPDF} className="flex-1 bg-vinciguerra-gold text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Download size={18} /> PDF</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {currentTab === 'shop' && Object.keys(cart).length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-50">
-          <div className="bg-vinciguerra-dark text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="bg-vinciguerra-gold text-white w-10 h-10 rounded-full flex items-center justify-center font-bold">{Object.values(cart).reduce((a, b) => a + b, 0)}</div>
-              <div><p className="text-xs text-gray-400">Totale stimato</p><p className="font-bold text-lg">€ {Object.entries(cart).reduce((t, [id, q]) => t + (getFinalPrice(products.find(p => p.id === id)!) * q), 0).toFixed(2)}</p></div>
-            </div>
-            <button onClick={submitOrder} className="bg-vinciguerra-gold px-6 py-2 rounded-xl font-bold hover:scale-105 transition-transform flex items-center gap-2">Invia Ordine <ArrowRight size={18}/></button>
           </div>
         </div>
       )}
