@@ -31,22 +31,17 @@ export default function AdminCategories() {
 
     try {
       if (editingId) {
-        // MODIFICA
         const { error } = await supabase
           .from('vb_categories')
           .update({ name: newName, parent_id: selectedParent || null, position: newPos })
           .eq('id', editingId);
-        
         if (error) throw error;
       } else {
-        // CREAZIONE - CORRETTO: vb_categories (senza //)
         const { error } = await supabase
           .from('vb_categories')
           .insert([{ name: newName, parent_id: selectedParent || null, position: newPos }]);
-        
         if (error) throw error;
       }
-      
       resetForm();
       await fetchCategories();
     } catch (error: any) {
@@ -96,11 +91,7 @@ export default function AdminCategories() {
     setExpandedParents(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const parents = categories
-    .filter(c => !c.parent_id)
-    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.//name)); // Fix typo here too
-
-  // CORREZIONE SORTING FINALE
+  // Ordinamento pulito e senza commenti interni
   const sortedParents = [...categories]
     .filter(c => !c.parent_id)
     .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
