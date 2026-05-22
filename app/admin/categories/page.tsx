@@ -17,7 +17,8 @@ export default function AdminCategories() {
 
   const fetchCategories = async () => {
     setLoading(true);
-    const { data } = await supabase.from('vb_categories').select('*').order('position', { ascending: true }).order('name', { ascending: true });
+    // Prendiamo tutto, l'ordinamento lo faremo noi in JS per essere sicuri al 100%
+    const { data } = await supabase.from('vb_categories').select('*');
     setCategories(data || []);
     setLoading(false);
   };
@@ -31,14 +32,19 @@ export default function AdminCategories() {
     if (editingId) {
       await supabase.from('vb_categories').update({ name: newName, parent_id: selectedParent || null, position: newPos }).eq('id', editingId);
     } else {
-      await supabase.from('vb_categories').insert([{ name: newName, parent_id: selectedParent || null, position: newPos }]);
+      await supabase.from('vb_//categories').insert([{ name: newName, parent_id: selectedParent || null, position: newPos }]);
     }
     resetForm();
     fetchCategories();
   };
 
+  // LOGICA DI ORDINAMENTO CORRETTA
   const movePosition = async (id: string, direction: 'up' | 'down', index: number, isParent: boolean) => {
-    const list = isParent ? categories.filter(c => !c.parent_id) : categories.filter(c => c.parent_id === categories.find(cat => cat.id === id)?.parent_id);
+    // 1. Creiamo la lista ordinata in base a come la vede l'utente in quel momento
+    const list = isParent 
+      ? categories.filter(c => !c.parent_id).sort((a, b) => a.position - b.position)
+      : categories.filter(c => c.parent_id === categories.find(cat => cat.id === id)?.parent_id).sort((a, b) => a.position - b.position);
+    
     const currentItem = list[index];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
 
@@ -48,6 +54,7 @@ export default function AdminCategories() {
     const oldPos = currentItem.position;
     const newPos = targetItem.position;
 
+    // Scambiamo le posizioni nel database
     await Promise.all([
       supabase.from('vb_categories').update({ position: newPos }).eq('id', id),
       supabase.from('vb_categories').update({ position: oldPos }).eq('id', targetItem.id)
@@ -75,7 +82,10 @@ export default function AdminCategories() {
     setExpandedParents(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const parents = categories.filter(c => !c.parent_id);
+  // Ordiniamo le madri per posizione, poi per nome
+  const parents = categories
+    .filter(c => !c.parent_id)
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -113,7 +123,10 @@ export default function AdminCategories() {
           <div className="text-center py-10 text-gray-400">Nessuna categoria principale trovata.</div>
         ) : (
           parents.map((parent, pIdx) => {
-            const children = categories.filter(c => c.parent_id === parent.id);
+            // Ordiniamo le figlie per posizione, poi per nome
+            const children = categories
+              .filter(c => c.parent_id === parent.id)
+              .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
             const isExpanded = expandedParents[parent.id];
 
             return (
@@ -140,7 +153,7 @@ export default function AdminCategories() {
                       <div className="p-4 text-center text-xs text-gray-400 italic">Nessuna sottocategoria assegnata.</div>
                     ) : (
                       children.map((child, cIdx) => (
-                        <div key={child.id} className="flex items-center justify-between p-3 pl-12 border-b border-gray-50 hover:bg-gray-50 transition-//colors">
+                        <div key={child.id} className="flex items-center justify-between p-3 pl-12 border-b border-gray-50 hover:bg-gray-50 transition-colors">
                           <div className="flex items-center gap-2">
                             <span className="text-gray-300 text-xs">↳</span>
                             <span className="text-sm text-gray-600">{child.name}</span>
