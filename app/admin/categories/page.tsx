@@ -17,7 +17,8 @@ export default function AdminCategories() {
 
   const fetchCategories = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('vb_categories').select('*');
+    // Prendiamo tutto e ordiniamo SOLO per posizione in database
+    const { data, error } = await supabase.from('vb_categories').select('*').order('position', { ascending: true });
     if (error) console.error("Errore caricamento:", error);
     setCategories(data || []);
     setLoading(false);
@@ -31,42 +32,47 @@ export default function AdminCategories() {
 
     try {
       if (editingId) {
-        const { error } = await supabase
-          .from('vb_categories')
-          .update({ name: newName, parent_id: selectedParent || null, position: newPos })
-          .eq('id', editingId);
+        const { error } = await supabase.from('vb_categories').update({ 
+          name: newName, 
+          parent_id: selectedParent || null, 
+          position: newPos 
+        }).eq('id', editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('vb_categories')
-          .insert([{ name: newName, parent_id: selectedParent || null, position: newPos }]);
+        const { error } = await supabase.from('vb_categories').insert([{ 
+          name: newName, 
+          parent_id: selectedParent || null, 
+          position: newPos 
+        }]);
         if (error) throw error;
       }
       resetForm();
-      await fetchCategories();
+      fetchCategories();
     } catch (error: any) {
-      alert("Errore nel salvataggio: " + error.message);
+      alert("Errore: " + error.message);
     }
   };
 
+  // LOGICA DI SPOSTAMENTO PROFESSIONALE (Re-indexing)
   const movePosition = async (id: string, direction: 'up' | 'down', index: number, isParent: boolean) => {
+    // 1. Filtriamo la lista corretta (solo madri o solo figlie del genitore selezionato)
     const list = isParent 
       ? categories.filter(c => !c.parent_id).sort((a, b) => a.position - b.position)
       : categories.filter(c => c.parent_id === categories.find(cat => cat.id === id)?.parent_id).sort((a, b) => a.position - b.position);
     
-    const currentItem = list[index];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-
     if (targetIndex < 0 || targetIndex >= list.length) return;
 
-    const targetItem = list[targetIndex];
-    const oldPos = currentItem.position;
-    const newPos = targetItem.position;
+    // 2. Creiamo la nuova lista spostando l'elemento
+    const newList = [...list];
+    const [movedItem] = newList.splice(index, 1);
+    newList.splice(targetIndex, 0, movedItem);
 
-    await Promise.all([
-      supabase.from('vb_categories').update({ position: newPos }).eq('id', id),
-      supabase.from('vb_categories').update({ position: oldPos }).eq('id', targetItem.id)
-    ]);
+    // 3. Aggiorniamo le posizioni di TUTTI gli elementi della lista nel database
+    for (let i = 0; i < newList.length; i++) {
+      await supabase.from('vb_categories').update({ position: i }).eq('id', newList[i].id);
+    }
+
     fetchCategories();
   };
 
@@ -83,7 +89,7 @@ export default function AdminCategories() {
   const deleteCategory = async (id: string) => {
     if (!confirm('Sei sicuro? Eliminerai anche le sottocategorie!')) return;
     const { error } = await supabase.from('vb_categories').delete().eq('id', id);
-    if (error) alert("Errore eliminazione");
+    if (error) alert("Errore eliminazione: " + error.message);
     else fetchCategories();
   };
 
@@ -91,10 +97,10 @@ export default function AdminCategories() {
     setExpandedParents(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Ordinamento pulito e senza commenti interni
+  // Filtriamo e ordiniamo le Madri
   const sortedParents = [...categories]
     .filter(c => !c.parent_id)
-    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+    .sort((a, b) => a.position - b.position);
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -134,7 +140,7 @@ export default function AdminCategories() {
           sortedParents.map((parent, pIdx) => {
             const children = categories
               .filter(c => c.parent_id === parent.id)
-              .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+              .sort((a, b) => a.position - b.position);
             const isExpanded = expandedParents[parent.id];
 
             return (
